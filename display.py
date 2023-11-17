@@ -5,23 +5,33 @@ import random
 import sys
 import tcdicn
 
-
 async def sensor_main(sensor_name, client):
-    if sensor_name == "CoSensor":
-        tag = "co"
-        value_range = range(0, 100)  # Simulating binary occupancy detection
-    elif sensor_name == "SmokeSensor":
-        tag = "smoke"
-        value_range = range(0, 100)  # Simulating intensity values
-    elif sensor_name == "FlameSensor":
-        tag = "flame"
-        value_range = [0, 1]
-    elif sensor_name == "TempSensor":
-        tag = "temp"
-        value_range = range(0, 100)
+    # if sensor_name == "CoSensor":
+    #     tag = "co"
+    #     value_range = range(0, 100)  # Simulating binary occupancy detection
+    # elif sensor_name == "SmokeSensor":
+    #     tag = "smoke"
+    #     value_range = range(0, 100)  # Simulating intensity values
+    # elif sensor_name == "FlameSensor":
+    #     tag = "flame"
+    #     value_range = [0, 1]
+    # elif sensor_name == "TempSensor":
+    #     tag = "temp"
+    #     value_range = range(0, 100)
+    if sensor_name == "IRSensor":
+        tag = "ir"
+        value_range = [0, 5]  
+    elif sensor_name == "IntensitySensor":
+        tag = "intensity"
+        value_range = [0, 120]  # Simulating intensity values
+    elif sensor_name == "BluetoothSensor":
+        tag = "bluetooth"
+        value_range = [0, 10]  # Simulating intensity values
+    elif sensor_name == "ProximitySensor":
+        tag = "proximity"
+        value_range = [0, 10]  # Simulating intensity values
     else:
         raise ValueError(f"Unknown sensor type: {sensor_name}")
-
     async def run_sensor():
         while True:
             await asyncio.sleep(random.uniform(1, 2))
@@ -44,7 +54,6 @@ async def sensor_main(sensor_name, client):
     except asyncio.exceptions.CancelledError:
         logging.info(f"{sensor_name} - Client has shutdown.")
 
-
 async def run_actuator(client, intensity_tag, brightness_tag):
     brightness = 0  # Initial brightness level
 
@@ -55,9 +64,7 @@ async def run_actuator(client, intensity_tag, brightness_tag):
         # Adjust brightness based on intensity value (example logic)
         if intensity is not None:
             brightness = min(intensity, 100)  # Limit brightness to 100
-            logging.info(
-                f"Brightness Actuator - Adjusting brightness to {brightness} based on intensity {intensity}"
-            )
+            logging.info(f"Brightness Actuator - Adjusting brightness to {brightness} based on intensity {intensity}")
 
         # Set the brightness value
         try:
@@ -67,8 +74,7 @@ async def run_actuator(client, intensity_tag, brightness_tag):
 
         # Sleep for a random interval before checking intensity again
         await asyncio.sleep(random.uniform(1, 2))
-
-
+        
 async def actuator_main(actuator_name, client, sensor_tag, actuator_tag):
     logging.info(f"{actuator_name} - Starting actuator...")
 
@@ -80,21 +86,28 @@ async def actuator_main(actuator_name, client, sensor_tag, actuator_tag):
     sensor_value = ""
     actuator_value = 0
     while True:
-        if sensor_tag == "flame":
+        if sensor_tag == "intensity":
             sensor_value = await client.get(sensor_tag, get_ttl, get_tpf, get_ttp)
-            if sensor_value is not None:
-                actuator_value = 1
-                logging.info(
-                    f"Sprinklers Siwtched ON based on flame sensor value {sensor_value}"
-                )
+            if sensor_value >= 100:
+                actuator_value = 100
+                # logging.info(f"Sprinklers Siwtched ON based on flame sensor value {sensor_value}")
+                logging.info(f"Brightness Actuator - Adjusting brightness to {actuator_value} based on intensity {sensor_value}")
+    
 
-        elif sensor_tag == "smoke":
+        if sensor_tag == "mirophone":
             sensor_value = await client.get(sensor_tag, get_ttl, get_tpf, get_ttp)
             if sensor_value > 50:
-                actuator_value = 1
-                logging.info(
-                    f"Safety Lights Switched ON based on smoke sensor value {sensor_value}"
-                )
+                actuator_value = 50
+                # logging.info(f"Safety Lights Switched ON based on smoke sensor value {sensor_value}")        
+                logging.info(f"Volume Actuator - Adjusting volume to {actuator_value} based on microphone {sensor_value}")
+
+        if sensor_tag == "occupancy":
+            sensor_value = await client.get(sensor_tag, get_ttl, get_tpf, get_ttp)
+            if sensor_value == 0:
+                actuator_value = 0
+                # logging.info(f"Safety Lights Switched ON based on smoke sensor value {sensor_value}")        
+                logging.info(f"Sleep Actuator - Adjusting device to sleep {actuator_value} based on occupancy {sensor_value}")
+
 
         # Set the brightness value
         try:
@@ -124,25 +137,27 @@ async def main():
     # Logging verbosity
     logging.basicConfig(
         format="%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s",
-        level=logging.INFO,
-        datefmt="%H:%M:%S:%m",
-    )
+        level=logging.INFO, datefmt="%H:%M:%S:%m")
 
     # Start the client as a background task
     logging.info("Starting client...")
     client = tcdicn.Client(
-        id, port, ["always"], server_host, server_port, net_ttl, net_tpf, net_ttp
-    )
+        id, port, ["always"],
+        server_host, server_port,
+        net_ttl, net_tpf, net_ttp)
 
     # Start the Sensors
-    asyncio.create_task(sensor_main("CoSensor", client))
-    asyncio.create_task(sensor_main("SmokeSensor", client))
-    asyncio.create_task(sensor_main("FlameSensor", client))
-    asyncio.create_task(sensor_main("TempSensor", client))
+    asyncio.create_task(sensor_main("IRSensor", client))
+    asyncio.create_task(sensor_main("IntensitySensor", client))
+    asyncio.create_task(sensor_main("ProximitySensor", client))
+    asyncio.create_task(sensor_main("BluetoothSensor", client))
 
-    asyncio.create_task(
-        actuator_main("SprinklerActuator", client, "flame", "sprinklers")
-    )
+    asyncio.create_task(actuator_main("BrightnessActuator", client, "intensity", "brightness"))
+
+    asyncio.create_task(actuator_main("SleepActuator", client, "occupancy", "sleep"))
+
+    asyncio.create_task(actuator_main("VolumeActuator", client, "microphone", "volume"))
+
 
     # Start the Brightness Actuator
     # asyncio.create_task(actuator_main("BrightnessActuator", client, "intensity", "brightness"))
@@ -152,7 +167,6 @@ async def main():
         await client.task
     except asyncio.exceptions.CancelledError:
         logging.info("Client has shutdown.")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
